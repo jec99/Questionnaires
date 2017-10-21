@@ -1,4 +1,7 @@
 
+
+using Clustering
+
 #=
 
 definining a partition tree type --- a hiersrchy of folders
@@ -99,7 +102,21 @@ function correlation_similarity(data::Array{Number,2},part::Partition; normalize
 end
 
 
-function dyadic_tree(vecs,vals; levels=12,n_replicates=10)
+function kmeans_rep(data,k;replications=10)
+    best = nothing
+    best_cost = Inf
+    for _ in 1:replications
+        a = kmeans(data,k)
+        if a.totalcost < best_cost
+            best_cost = a.totalcost
+            best = a.assignments
+        end
+    end
+    return best
+end
+
+
+function dyadic_tree(vecs,vals; max_levels=12,n_replicates=10)
     #=
     maxvals=0.99;
     NLevels = 12;
@@ -109,7 +126,8 @@ function dyadic_tree(vecs,vals; levels=12,n_replicates=10)
     points they parameterize based on the geometry of this embedding
 
     vecs should be d x n, where d is the embedding dimension and n
-    is the number of points
+    is the number of points. these are meant to be the top eigenvectors
+    and eigenvalues of a similarity matrix
     =#
 
     if std(vecs[1,:]) == 0
@@ -122,9 +140,76 @@ function dyadic_tree(vecs,vals; levels=12,n_replicates=10)
 
     tree = PartitionTree(1:n_points)
     parents = tree.levels[1]
-    for l in 1:levels
+    for l in 2:max_levels
         part = Partition()
         max_folder_size = 0
-        # TODO: FINISH
+
+        # subdivide folders
+        for folder in parents
+            idxs = collect(folder.idxs)
+            sz = length(idxs)
+            max_folder_size = max(max_folder_size,sz)
+            sub_data = vecs[:,idxs]'
+
+            if sz >= 4
+                a = kmeans_rep(sub_data,k)
+            else  # if the folder is very small, don't break it up
+                a = Array{Int}(ones(sz));
+            end
+
+            child1 = Folder(folder,[],idxs[a .== 1])
+            push!(part,child1)
+            push!(folder.children,child1)
+            if length(unique(a)) == 2
+                child2 = Folder(folder,[],idxs[a .== 2])
+                push!(part,child2)
+                push!(folder.children,child2)
+            end
+        end
+
+        push!(tree.levels,part)
+        parents = part
+
+        if max_folder_size < 4
+            break
+        end
     end
+
+    # take care of leaves
+    leaves = Partition()
+    for folder in parents
+        for i in folder.idxs
+            child = Folder(folder,[],[i])
+            push!(leaves,child)
+            push!(folder.children,child)
+        end
+    end
+    push!(tree.levels,leaves)
+
+    return tree
 end
+
+
+function dual_geometry(data,tree; alpha=1,normalize_=true,center_=true)
+    #=
+    computes the geometry (in the form of a similarity matrix) of a dataset
+    based on a geometry of its features (rows). this can then be used to
+    construct a tree on the data points (columns)
+    =#
+
+    n_features, n_points = size(data)
+    depth = length(tree.levels)
+    W = np.zeros(n_points,n_points)
+    # don't interate over root or leaves
+    for i in 2:depth-1
+        similarity = correlation_similarity(data,tree.levels[i],normalize_=normalize_,center=center)
+        similarity = similarity + similarity'
+        W += 2^(-alpha*i)*similarity;
+        # this maybe not be exactly right, unless the folder divisions are balanced
+    end
+
+    return W
+end
+
+
+

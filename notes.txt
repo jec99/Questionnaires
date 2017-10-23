@@ -18,5 +18,8 @@ settings/functions that are needed:
 4. get top eigenvectors/eigenvalues
 	ncut (regularization + eigensolve)
 
-main reserach goal: solve the subspace clustering with irrelevant
+main research goal: solve the subspace clustering with irrelevant
 features problem, but with irrelavancies depending on the subspace
+
+
+lol

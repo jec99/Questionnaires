@@ -1,6 +1,7 @@
 
 
 using Clustering
+using Base
 
 #=
 
@@ -24,16 +25,45 @@ mutable struct Folder
         return x
     end
     Folder() = Folder([])
+    function Folder(p,c,idxs)
+        x = new()
+        x.parent = p
+        x.children = c
+        x.inds = IntSet(idxs)
+        return x
+    end
+end
+
+function str(f::Folder; name_=true)
+    if name_
+        return join(["Folder([",join(collect(f.inds),","),"])"])
+    else
+        return join(["[",join(collect(f.inds),","),"]"])
+    end
+end
+
+function Base.show(io::IO,f::Folder)
+    print(io,str(f))
 end
 
 
 mutable struct Partition
     folders::Array{Folder,1}
+    ground_set::IntSet
 
-    Partition(folders) = (x = new(); x.folders = folders; x)
-    Partition() = Partition([])
+    function Partition(folders)
+        x = new();
+        x.folders = folders;
+        x.ground_set = union([f.inds for f in folders]...)
+        return x
+    end
+    Partition() = (x = new(); x.folders = []; x.ground_set = IntSet())
 end
 
+function Base.show(io::IO,p::Partition)
+    to_print = join(["Partition(",join([str(f,name_=false) for f in p.folders],","),")"])
+    print(io,to_print)
+end
 
 mutable struct PartitionTree
     #=
@@ -42,6 +72,13 @@ mutable struct PartitionTree
     =#
     ground_set::IntSet
     levels::Array{Partition,1}
+end
+
+function Base.show(io::IO,t::PartitionTree)
+    print(t.levels[1])
+    for l in t.levels[2:end]
+        print(io,"\n");print(io,l)
+    end
 end
 
 function PartitionTree(ground_set; make_leaves=false)
@@ -53,7 +90,7 @@ function PartitionTree(ground_set; make_leaves=false)
         leaves = Partition()
         push!(tree.levels,leaves)
         for i in ground_set
-            leaf = Folder(root,[],IntSet([i]))
+            leaf = Folder(root,Folder[],IntSet([i]))
             leaf.parent = root
             push!(root.children,leaf)
             push!(leaves.folders,leaf)
@@ -63,7 +100,7 @@ function PartitionTree(ground_set; make_leaves=false)
 end
 
 
-function correlation_similarity(data::Array{Number,2},part::Partition; normalize_=true,center_=true)
+function correlation_similarity(data,part::Partition; normalize_=true,center_=true)
     #=
     - computes the correlations of (the columns of) data, under a partition
     of the rows (features) of data
@@ -73,8 +110,8 @@ function correlation_similarity(data::Array{Number,2},part::Partition; normalize
     =#
 
     n_features, n_points = size(data)
-    if n_features != len(part.gound_set)
-        error('partition must be of the rows of data')
+    if n_features != length(part.ground_set)
+        error("partition must be of the rows of data")
     end
 
     W = zeros(n_points,n_points)
@@ -91,7 +128,7 @@ function correlation_similarity(data::Array{Number,2},part::Partition; normalize
             sub_data = sub_data .- mean(sub_data,1)
         end
         if normalize_
-            sub_data = sub_data ./ sqrt(sum(abs2,sub_data,1))
+            sub_data = sub_data ./ sqrt.(sum(abs2,sub_data,1))
         end
 
         # dense matrix arithmetic; maybe sparsify later

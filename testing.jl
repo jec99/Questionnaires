@@ -23,3 +23,36 @@ p.folders[2].parent = root
 push!(root.children,p.folders[1])
 push!(root.children,p.folders[2])
 
+#
+# kmeans_rep function
+#
+data = zeros(10,100)
+data[:,1:50] = randn(10,50)
+data[:,51:100] = randn(10,50) + 2
+clustering = kmeans_rep(data,2,replications=20)
+assert((all(clustering[1:50] .== 2) && all(clustering[51:end] .== 1)) ||
+    (all(clustering[51:end] .== 2) && all(clustering[1:50] .== 1)))
+
+#
+# correlation_similarity function
+#
+t = PartitionTree(1:4)
+root = t.levels[1].folders[1]
+
+f1 = Folder([1 2]); f2 = Folder([3 4])
+f1.parent = f2.parent = root
+push!(root.children,f1); push!(root.children,f2)
+p1 = Partition([f1,f2])
+push!(t.levels,p1)
+
+fs = [Folder([i]) for i in 1:4]
+fs[1].parent = fs[2].parent = f1
+fs[3].parent = fs[4].parent = f2
+push!(f1.children,fs[1])
+push!(f1.children,fs[2])
+push!(f2.children,fs[3])
+push!(f2.children,fs[4])
+p2 = Partition(fs)
+push!(t.levels,p2)
+
+data = randn(4,4)

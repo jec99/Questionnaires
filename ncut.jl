@@ -24,14 +24,12 @@ function ncut(W,n_eigs;normalize_=true,regularizer=eps())
     deg = sum(abs.(W),2)  # 'degree' --- sum of rows
     deg_r = (d - sum(W,2))/2 + offset
     d = d + 2*offset
-    dr = dr + offset
     W = W + diagm(dr)
     d_invsqrt = 1/sqrt.(d+regularizer)
 
     P = (W.*d_invsqrt).*d_invsqrt'  # multiply on both sides by diagonal
     vals,vecs = eig(Symmetric(P),n-n_eigs+1:n)  # cols of V are eigenvectors
 
-    # vecs = vecs'
     if normalize_
         vecs = vecs.*d_invsqrt
         for i in 1:n_eigs
@@ -41,4 +39,12 @@ function ncut(W,n_eigs;normalize_=true,regularizer=eps())
     end
 
     return vecs
+end
+
+
+function ncut_fast(W,n_eigs;normalize_=true,regularizer=eps())
+    #=
+    using simultaneous power iteration and sketching
+    and perhaps sparsification
+    =#
 end

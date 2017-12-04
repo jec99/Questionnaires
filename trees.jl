@@ -13,21 +13,26 @@ for now, each folder in a partition tree only contains indices,
 =#
 
 mutable struct Folder
-    parent::Nullable{Folder}  # folder or nothing
+    parent::Folder  # folder or nothing
     children::Array{Folder,1}
     inds::IntSet
+
+    function Folder(inds)
+        x = new()
+        x.children = Folder[]
+        x.inds = IntSet(inds)
+        return x
+    end
+    Folder() = Folder([])
 end
-
-Folder() = Folder(nothing,[],[])
-
-Folder(inds) = Folder(nothing,[],IntSet(inds))
 
 
 mutable struct Partition
     folders::Array{Folder,1}
-end
 
-Partition() = Partition([])
+    Partition(folders) = (x = new(); x.folders = folders; x)
+    Partition() = Partition([])
+end
 
 
 mutable struct PartitionTree
@@ -64,7 +69,7 @@ function correlation_similarity(data::Array{Number,2},part::Partition; normalize
     of the rows (features) of data
     - returns a similarity matrix
 
-    corresponds to parition_localgeometry in coifman's code
+    corresponds to partition_localgeometry in coifman's code
     =#
 
     n_features, n_points = size(data)
@@ -86,7 +91,7 @@ function correlation_similarity(data::Array{Number,2},part::Partition; normalize
             sub_data = sub_data .- mean(sub_data,1)
         end
         if normalize_
-            sub_data = sub_data ./ sum(abs2,sub_data,1)
+            sub_data = sub_data ./ sqrt(sum(abs2,sub_data,1))
         end
 
         # dense matrix arithmetic; maybe sparsify later
@@ -94,7 +99,7 @@ function correlation_similarity(data::Array{Number,2},part::Partition; normalize
         W += abs.(sub_data'*conj.(sub_data))*length(inds);
     end
 
-    if total_len >
+    if total_len > 0
         W ./= total_len
     end
 
@@ -134,7 +139,7 @@ function dyadic_tree(vecs,vals; max_levels=12,n_replicates=10)
         vecs = vecs[2:end,:]
         vals = vals[2:end]
     end
-    d, n_points = size(vecs)
+    d,n_points = size(vecs)
     levels = min(levels,d)
     vecs = vecs .* vals
 
@@ -204,7 +209,7 @@ function dual_geometry(data,tree; alpha=1,normalize_=true,center_=true)
     for i in 2:depth-1
         similarity = correlation_similarity(data,tree.levels[i],normalize_=normalize_,center=center)
         similarity = similarity + similarity'
-        W += 2^(-alpha*i)*similarity;
+        W += 2^(-alpha*i)*similarity
         # this maybe not be exactly right, unless the folder divisions are balanced
     end
 

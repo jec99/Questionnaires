@@ -57,7 +57,7 @@ mutable struct Partition
         x.ground_set = union([f.inds for f in folders]...)
         return x
     end
-    Partition() = (x = new(); x.folders = []; x.ground_set = IntSet())
+    Partition() = (x = new(); x.folders = []; x.ground_set = IntSet(); x)
 end
 
 function Base.show(io::IO,p::Partition)
@@ -163,22 +163,22 @@ function dyadic_tree(vecs,vals; max_levels=12,n_replicates=10)
     maxvals=0.99;
     NLevels = 12;
 
-    takes in eigenvectors and eigenvalues coming from a similarity
+    eigenvalues coming from a similarity
     matrix (an embedding) and returns a partition tree of the
     points they parameterize based on the geometry of this embedding
 
-    vecs should be d x n, where d is the embedding dimension and n
+    vecs should be n x d, where d is the embedding dimension and n
     is the number of points. these are meant to be the top eigenvectors
     and eigenvalues of a similarity matrix
     =#
 
-    if std(vecs[1,:]) == 0
-        vecs = vecs[2:end,:]
+    if std(vecs[:,1]) == 0
+        vecs = vecs[:,2:end]
         vals = vals[2:end]
     end
-    d,n_points = size(vecs)
-    levels = min(levels,d)
-    vecs = vecs .* vals
+    n_points,d = size(vecs)
+    levels = min(max_levels,d)
+    vecs = vecs .* vals'
 
     tree = PartitionTree(1:n_points)
     parents = tree.levels[1]
@@ -187,24 +187,24 @@ function dyadic_tree(vecs,vals; max_levels=12,n_replicates=10)
         max_folder_size = 0
 
         # subdivide folders
-        for folder in parents
-            idxs = collect(folder.idxs)
+        for folder in parents.folders
+            idxs = collect(folder.inds)
             sz = length(idxs)
             max_folder_size = max(max_folder_size,sz)
-            sub_data = vecs[:,idxs]'
+            sub_data = vecs[idxs,:]
 
             if sz >= 4
-                a = kmeans_rep(sub_data,k)
+                a = kmeans_rep(sub_data',2,replications=n_replicates)
             else  # if the folder is very small, don't break it up
-                a = Array{Int}(ones(sz));
+                a = Int.(ones(sz));
             end
 
             child1 = Folder(folder,[],idxs[a .== 1])
-            push!(part,child1)
+            push!(part.folders,child1)
             push!(folder.children,child1)
             if length(unique(a)) == 2
                 child2 = Folder(folder,[],idxs[a .== 2])
-                push!(part,child2)
+                push!(part.folders,child2)
                 push!(folder.children,child2)
             end
         end
@@ -219,10 +219,10 @@ function dyadic_tree(vecs,vals; max_levels=12,n_replicates=10)
 
     # take care of leaves
     leaves = Partition()
-    for folder in parents
-        for i in folder.idxs
+    for folder in parents.folders
+        for i in folder.inds
             child = Folder(folder,[],[i])
-            push!(leaves,child)
+            push!(leaves.folders,child)
             push!(folder.children,child)
         end
     end
@@ -237,12 +237,14 @@ function dual_geometry(data,tree; alpha=1,normalize_=true,center_=true)
     computes the geometry (in the form of a similarity matrix) of a dataset
     based on a geometry of its features (rows). this can then be used to
     construct a tree on the data points (columns)
+
+    corresponds to partition_dualgeometry in Coifman's code
     =#
 
     n_features, n_points = size(data)
     depth = length(tree.levels)
     W = np.zeros(n_points,n_points)
-    # don't interate over root or leaves
+    # don't integrate over root or leaves; their information is basically useless
     for i in 2:depth-1
         similarity = correlation_similarity(data,tree.levels[i],normalize_=normalize_,center=center)
         similarity = similarity + similarity'

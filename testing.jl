@@ -56,3 +56,20 @@ p2 = Partition(fs)
 push!(t.levels,p2)
 
 data = randn(4,4)
+
+W = correlation_similarity(data,p1)
+
+#
+# dyadic_tree function
+#
+vecs = zeros(100,16)
+vals = ones(16)
+vecs[1:25,:] = randn(25,16)
+vecs[26:50,:] = randn(25,16)+1.5
+vecs[51:75,:] = randn(25,16)+5
+vecs[76:end,:] = randn(25,16)+6.5
+t = dyadic_tree(vecs,vals;max_levels=5,n_replicates=20)
+
+#
+# dual_geometry
+#

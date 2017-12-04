@@ -29,6 +29,7 @@ function ncut(W,n_eigs;normalize_=true,regularizer=eps())
 
     P = (W.*d_invsqrt).*d_invsqrt'  # multiply on both sides by diagonal
     vals,vecs = eig(Symmetric(P),n-n_eigs+1:n)  # cols of V are eigenvectors
+    # vals,vecs = eigs(Symmetric(P),nev=n_eigs,which=:LM)
     # eigenvectors,eigenvalues ordered increasing; want decreasing
     vecs = vecs[:,end:-1:1]
     vals = vals[end:-1:1]
@@ -45,7 +46,7 @@ function ncut(W,n_eigs;normalize_=true,regularizer=eps())
 end
 
 
-function eigs_fast(A,k; q=nothing)
+function eigs_fast(A,k; q=2)
     #=
     using block Krylov iteration (Musco & Musco NIPS 2015)
 
@@ -53,7 +54,6 @@ function eigs_fast(A,k; q=nothing)
     =#
 
     n = size(A,1)
-    q = (q === nothing) ? log(size(A,1))/sqrt(acc) : q
     B = randn(n,k)
     K = zeros(n,q*k)
     K[:,1:k] = A*B

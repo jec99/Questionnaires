@@ -152,92 +152,6 @@ function correlation_similarity(data,part::Partition; normalize_=true,center_=tr
 end
 
 
-function ssc_similarity(data,part::Partition; lam=1.0,center_=false,cutoff=10,iters=25,diag_=1.0)
-    #=
-    solve the lasso-ssc problem on each sub-folder and sum similarity
-    matrices. always normalize and center
-
-    the main question is how lambda should scale. in the candes
-    paper it is shown that the best choice is 1/sqrt(d), d being the
-    dimension of the subspace we're looking for. obviously this is a
-    bit complicated in the presence of feature spaces of changing
-    dimensionality. one obvious solution is to scale lambda as the
-    reduction in feature space, in effect assuming that we keep
-    about an even proportion of the subspace when we cut the subspace
-    down. but this is odd; a random subspace should retain its
-    dimension when we cut out coordinates. so another idea is to
-    not modify lambda at all.
-
-    the solves should be via fast projected gradient method, to
-    allow for the zero diagonal constraint
-
-    after doing the SSC to get a coefficient matrix C, we derive a
-    similarity matrix W as eye(n) + (|C| + |C'|)/2. typically this
-    is positive semidefinite.
-    =#
-
-    n_features, n_points = size(data)
-    if n_features != length(part.ground_set)
-        error("partition must be of the rows of data")
-    end
-
-    W = zeros(n_points,n_points)
-    total_len = 0
-    for folder in part.folders
-        idxs = collect(folder.idxs)
-        if length(idxs) <= cutoff
-            continue
-        end
-        total_len += length(idxs)
-        sub_data = data[idxs,:]
-
-        if center_
-            sub_data = sub_data .- mean(sub_data,1)
-        end
-        sub_data = sub_data ./ sqrt.(sum(abs2,sub_data,1))
-
-        # dense matrix arithmetic; maybe sparsify later
-        # with a nearest neighbor search
-        C = ssc(data,lam;iters=iters)
-        W += diag_*eye(n_points) + (abs.(C)+abs.(C'))/2
-    end
-
-    if total_len > 0
-        W ./= total_len
-    end
-
-    return W
-end
-
-
-function soft_threshold(A,lam)
-    return sign.(A).*max.(abs.(A)-lam,0)
-end
-
-
-function ssc(data,lam;iters=100)
-    #=
-    solves min 1/2*||data - data*X||_F^2 + lam*||X||_1 s.t. diag(X) = 0
-    using the fast gradient method
-    =#
-
-    ATA = data'*data
-    n = size(data,2)
-    S = zeros(n,n)
-    L = eigs(ATA,nev=1,which=:LM)[1][1]
-    t = 1.0
-    for i in 1:iters
-        G = ATA*(S - eye(n))
-        S_proj = soft_threshold(S - 1/L*G,lam/L)
-        for i in 1:n; S_proj[i,i] = 0; end
-        t0 = t
-        t = (1 + sqrt(1 + 4*t^2))/2
-        S = S_proj + ((t0-1)/t) * (S_proj-S)
-    end
-    return S
-end
-
-
 function kmeans_rep(data,k;replications=10)
     best = nothing
     best_cost = Inf
@@ -356,6 +270,99 @@ function dual_geometry(data,tree; alpha=1,normalize_=true,center_=true,cutoff=2)
 
     return W
 end
+
+
+
+
+#
+# ssc affinities: deprecated
+#
+
+function ssc_similarity(data,part::Partition; lam=1.0,center_=false,cutoff=10,iters=25,diag_=1.0)
+    #=
+    solve the lasso-ssc problem on each sub-folder and sum similarity
+    matrices. always normalize and center
+
+    the main question is how lambda should scale. in the candes
+    paper it is shown that the best choice is 1/sqrt(d), d being the
+    dimension of the subspace we're looking for. obviously this is a
+    bit complicated in the presence of feature spaces of changing
+    dimensionality. one obvious solution is to scale lambda as the
+    reduction in feature space, in effect assuming that we keep
+    about an even proportion of the subspace when we cut the subspace
+    down. but this is odd; a random subspace should retain its
+    dimension when we cut out coordinates. so another idea is to
+    not modify lambda at all.
+
+    the solves should be via fast projected gradient method, to
+    allow for the zero diagonal constraint
+
+    after doing the SSC to get a coefficient matrix C, we derive a
+    similarity matrix W as eye(n) + (|C| + |C'|)/2. typically this
+    is positive semidefinite.
+    =#
+
+    n_features, n_points = size(data)
+    if n_features != length(part.ground_set)
+        error("partition must be of the rows of data")
+    end
+
+    W = zeros(n_points,n_points)
+    total_len = 0
+    for folder in part.folders
+        idxs = collect(folder.idxs)
+        if length(idxs) <= cutoff
+            continue
+        end
+        total_len += length(idxs)
+        sub_data = data[idxs,:]
+
+        if center_
+            sub_data = sub_data .- mean(sub_data,1)
+        end
+        sub_data = sub_data ./ sqrt.(sum(abs2,sub_data,1))
+
+        # dense matrix arithmetic; maybe sparsify later
+        # with a nearest neighbor search
+        C = ssc(data,lam;iters=iters)
+        W += diag_*eye(n_points) + (abs.(C)+abs.(C'))/2
+    end
+
+    if total_len > 0
+        W ./= total_len
+    end
+
+    return W
+end
+
+
+function soft_threshold(A,lam)
+    return sign.(A).*max.(abs.(A)-lam,0)
+end
+
+
+function ssc(data,lam;iters=100)
+    #=
+    solves min 1/2*||data - data*X||_F^2 + lam*||X||_1 s.t. diag(X) = 0
+    using the fast gradient method
+    =#
+
+    ATA = data'*data
+    n = size(data,2)
+    S = zeros(n,n)
+    L = eigs(ATA,nev=1,which=:LM)[1][1]
+    t = 1.0
+    for i in 1:iters
+        G = ATA*(S - eye(n))
+        S_proj = soft_threshold(S - 1/L*G,lam/L)
+        for i in 1:n; S_proj[i,i] = 0; end
+        t0 = t
+        t = (1 + sqrt(1 + 4*t^2))/2
+        S = S_proj + ((t0-1)/t) * (S_proj-S)
+    end
+    return S
+end
+
 
 function dual_geometry_ssc(data,tree; alpha=1,center_=false,cutoff=10,lam=1,iters=25,diag_=1.0)
     n_features, n_points = size(data)

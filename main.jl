@@ -122,7 +122,7 @@ end
 
 
 
-# ssc-based similarity metric
+# ssc-based similarity metric; doesn't really work
 #
 n_levels = 6;
 n_eigs_point = 8;

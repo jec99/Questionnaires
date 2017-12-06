@@ -6,7 +6,7 @@ regularized top eigensolve function
 
 =#
 
-function ncut(W,n_eigs;normalize_=true,regularizer=eps())
+function ncut(W,n_eigs; normalize_=true,regularizer=eps())
     #=
     finds the top n_eigs eigenvalues/eigenvectors of a symmetric
     matrix, with regularization.
@@ -14,7 +14,7 @@ function ncut(W,n_eigs;normalize_=true,regularizer=eps())
     basic: no sparsity, no randomization
     =#
 
-    offset = 5e-1
+    offset = 5e-1  # consider dropping
     # should really only be used on symetric matrices, but let's
     # symmetrize "just in case"
     W = (W+W')/2
@@ -22,17 +22,24 @@ function ncut(W,n_eigs;normalize_=true,regularizer=eps())
     n_eigs = min(n_eigs,n)
 
     deg = sum(abs.(W),2)  # 'degree' --- sum of rows
-    deg_r = (d - sum(W,2))/2 + offset
-    d = d + 2*offset
-    W = W + diagm(dr)
-    d_invsqrt = 1/sqrt.(d+regularizer)
+    deg_r = (deg .- sum(W,2))/2 + offset
+    deg = deg + 2*offset
+    deg = deg[:,1]
+    deg_r = deg_r[:,1]
+    W = W + diagm(deg_r)
+    d_invsqrt = 1./sqrt.(deg+regularizer)
 
-    P = (W.*d_invsqrt).*d_invsqrt'  # multiply on both sides by diagonal
+    P = (W.*d_invsqrt).*(d_invsqrt')  # multiply on both sides by diagonal
+
+    #=
     vals,vecs = eig(Symmetric(P),n-n_eigs+1:n)  # cols of V are eigenvectors
     # vals,vecs = eigs(Symmetric(P),nev=n_eigs,which=:LM)
     # eigenvectors,eigenvalues ordered increasing; want decreasing
     vecs = vecs[:,end:-1:1]
     vals = vals[end:-1:1]
+    =#
+
+    vals,vecs = eigs(Symmetric(P),nev=n_eigs)
 
     if normalize_
         vecs = vecs.*d_invsqrt
@@ -42,7 +49,7 @@ function ncut(W,n_eigs;normalize_=true,regularizer=eps())
         end
     end
 
-    return vecs
+    return vals,vecs
 end
 
 
@@ -63,6 +70,6 @@ function eigs_fast(A,k; q=2)
     O = qr(K)[1]
     M = O'*(A*O)
     vals,vecs = eigs(Symmetric(M),nev=k,which=:LM)
-    return vals, O*vecs
+    return vals,O*vecs
 end
 

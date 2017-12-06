@@ -39,7 +39,7 @@ function ncut(W,n_eigs; normalize_=true,regularizer=eps())
     vals = vals[end:-1:1]
     =#
 
-    vals,vecs = eigs(Symmetric(P),nev=n_eigs)
+    vals,vecs = eigs(Symmetric(P),nev=n_eigs,tol=1e-6)
 
     if normalize_
         vecs = vecs.*d_invsqrt
@@ -69,7 +69,7 @@ function eigs_fast(A,k; q=2)
     end
     O = qr(K)[1]
     M = O'*(A*O)
-    vals,vecs = eigs(Symmetric(M),nev=k,which=:LM)
+    vals,vecs = eigs(Symmetric(M),nev=k,which=:LM,tol=1e-6)
     return vals,O*vecs
 end
 

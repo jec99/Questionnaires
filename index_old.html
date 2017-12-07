@@ -1,0 +1,406 @@
+
+<meta charset="utf-8">
+<style>
+  .node {
+    cursor: pointer;
+  }
+
+  .node circle {
+    fill: #fff;
+    stroke: steelblue;
+    stroke-width: 1.5px;
+  }
+
+  .node text {
+    font: 10px sans-serif;
+  }
+
+  .link {
+    fill: none;
+    stroke: #ccc;
+    stroke-width: 1.5px;
+  }
+
+  #top-container {
+     margin: auto;
+     width: 1400px;
+     height: 510px;
+  }
+
+  #top-subcontainer {
+    margin: 0 auto;
+    width: 1274px;
+  }
+
+  #tree-container {
+    border: 1px solid grey;
+    margin: 10px;
+    background: #fffefd;
+    box-shadow: 8px 4px 0px black;
+    width: 720px;
+    float: left;
+  }
+
+  #bottom-container {
+    width: 1400px;
+    border-bottom: 1px solid #bbb;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    margin-top: 5px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  #bottom-container:before {
+    content: "";
+    width: 1400px;
+    height: 1px;
+    background: #aaa;
+    position: absolute;
+    top: 275px;
+  }
+
+  #matrix-container {
+    padding: 10px;
+    width: 480px;
+    margin: 0 auto;
+  }
+
+  #matrix {
+    margin: 0 auto;
+    image-rendering: pixelated;
+  }
+
+  #scatter-container {
+    margin: 10px;
+    margin-left: 40px;
+    float: left;
+    width: 480px;
+    height: 480px;
+    border: 1px solid black;
+    box-shadow: 8px 4px 0px black;
+  }
+
+  #scatter {
+    border: 1px solid black;
+  }
+
+</style>
+
+<body>
+  <div id="bottom-container">
+    <div id="matrix-container">
+      <canvas style="width:480px;" id="matrix"></canvas>
+    </div>
+  </div>
+
+  <div id="top-container">
+    <div id="top-subcontainer">
+      <div id="tree-container"></div>
+
+      <div id="scatter-container"></div>
+    </div>
+  </div>
+</body>
+
+<script src="https://ajax.googleapis.com/ajax/libs/threejs/r84/three.min.js"></script>
+<script type="text/javascript" src="//d3js.org/d3.v3.min.js"></script>
+<script src="https://d3js.org/d3-collection.v1.min.js"></script>
+<script src="https://d3js.org/d3-dispatch.v1.min.js"></script>
+<script src="https://d3js.org/d3-dsv.v1.min.js"></script>
+<script src="https://d3js.org/d3-request.v1.min.js"></script>
+<script src="https://d3js.org/d3-array.v1.min.js"></script>
+<script src="https://d3js.org/d3-collection.v1.min.js"></script>
+<script src="https://d3js.org/d3-color.v1.min.js"></script>
+<script src="https://d3js.org/d3-format.v1.min.js"></script>
+<script src="https://d3js.org/d3-interpolate.v1.min.js"></script>
+<script src="https://d3js.org/d3-time.v1.min.js"></script>
+<script src="https://d3js.org/d3-time-format.v2.min.js"></script>
+<script src="https://d3js.org/d3-scale.v1.min.js"></script>
+<script type="text/javascript">
+  !function(e,n){"object"==typeof exports&&"undefined"!=typeof module?module.exports=n(require("d3-request")):"function"==typeof define&&define.amd?define(["d3-request"],n):(e.d3=e.d3||{},e.d3.promise=n(e.d3))}(this,function(e){"use strict";function n(e,n){return function(){for(var t=arguments.length,r=Array(t),o=0;t>o;o++)r[o]=arguments[o];return new Promise(function(t,o){var u=function(e,n){return e?void o(Error(e)):void t(n)};n.apply(e,r.concat(u))})}}var t={};return["csv","tsv","json","xml","text","html"].forEach(function(r){t[r]=n(e,e[r])}),t});
+</script>
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
+<script type="text/javascript">
+  /*
+    first: showing the tree
+  */
+  (function () {
+    var margin = {top: 20, right: 60, bottom: 20, left: 60},
+        width = 720 - margin.right - margin.left,
+        height = 480 - margin.top - margin.bottom;
+
+    var i = 0,
+        duration = 450,
+        root;
+
+    var tree = d3.layout.tree()
+        .size([height, width]);
+
+    var diagonal = d3.svg.line().interpolate('step')
+          .x(function (d) { return d.x; })
+          .y(function (d) { return d.y; });
+
+    var svg = d3.select("#tree-container").append("svg")
+        .attr("width", width + margin.right + margin.left)
+        .attr("height", height + margin.top + margin.bottom)
+      .append("g")
+        .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+    d3.json("tree", function(error, flare) {
+      if (error) throw error;
+
+      root = flare;
+      root.x0 = height / 2;
+      root.y0 = 0;
+
+      function collapse(d) {
+        if (d.children) {
+          d._children = d.children;
+          d._children.forEach(collapse);
+          d.children = null;
+        }
+      }
+
+      root.children.forEach(collapse);
+      update(root);
+    });
+
+    d3.select(self.frameElement).style("height", "800px");
+
+    function update(source) {
+
+      // Compute the new tree layout.
+      var nodes = tree.nodes(root).reverse(),
+          links = tree.links(nodes);
+
+      // Normalize for fixed-depth.
+      // nodes.forEach(function(d) { d.y = d.depth * 180; });
+
+      // Update the nodes…
+      var node = svg.selectAll("g.node")
+          .data(nodes, function(d) { return d.id || (d.id = ++i); });
+
+      // Enter any new nodes at the parent's previous position.
+      var nodeEnter = node.enter().append("g")
+          .attr("class", "node")
+          .attr("transform", function(d) { return "translate(" + source.y0 + "," + source.x0 + ")"; })
+          .on("dblclick", dblclick)
+          .on("click", click);
+
+      nodeEnter.append("circle")
+          .attr("r", 1e-6)
+          .style("fill", function(d) { return d._children ? "lightsteelblue" : "#fff"; });
+
+      nodeEnter.append("text")
+          .attr("x", function(d) { return d.children || d._children ? -10 : 10; })
+          .attr("dy", ".35em")
+          .attr("text-anchor", function(d) { return d.children || d._children ? "end" : "start"; })
+          // .text(function(d) { return d.name; })
+          .text(function(d) { return ''; })
+          .style("fill-opacity", 1e-6);
+
+      // Transition nodes to their new position.
+      var nodeUpdate = node.transition()
+          .duration(duration)
+          .attr("transform", function(d) { return "translate(" + d.y + "," + d.x + ")"; });
+
+      nodeUpdate.select("circle")
+          .attr("r", 4.5)
+          .style("fill", function(d) { return d._children ? "lightsteelblue" : "#fff"; });
+
+      nodeUpdate.select("text")
+          .style("fill-opacity", 1);
+
+      // Transition exiting nodes to the parent's new position.
+      var nodeExit = node.exit().transition()
+          .duration(duration)
+          .attr("transform", function(d) { return "translate(" + source.y + "," + source.x + ")"; })
+          .remove();
+
+      nodeExit.select("circle")
+          .attr("r", 1e-6);
+
+      nodeExit.select("text")
+          .style("fill-opacity", 1e-6);
+
+      // Update the links…
+      var link = svg.selectAll("path.link")
+          .data(links, function(d) { return d.target.id; });
+
+      // Enter any new links at the parent's previous position.
+      link.enter().insert("path", "g")
+          .attr("class", "link")
+          .attr('d', function (d) {
+              return diagonal([{
+                  y: d.source.x0,
+                  x: d.source.y0
+              }, {
+                  y: d.source.x0,
+                  x: d.source.y0
+              }]);
+          });
+
+      // Transition links to their new position.
+      link.transition()
+          .duration(duration)
+          .attr("d", function (d) {
+              return diagonal([{
+                  y: d.source.x,
+                  x: d.source.y
+              }, {
+                  y: d.target.x,
+                  x: d.target.y
+              }]);
+          });
+
+      // Transition exiting nodes to the parent's new position.
+      link.exit().transition()
+          .duration(duration)
+          .attr("d", function (d) {
+              return diagonal([{
+                  y: d.source.x,
+                  x: d.source.y
+              }, {
+                  y: d.source.x,
+                  x: d.source.y
+              }]);
+          })
+          .remove();
+
+      // Stash the old positions for transition.
+      nodes.forEach(function(d) {
+        d.x0 = d.x;
+        d.y0 = d.y;
+      });
+    }
+
+    // Toggle children on click.
+    function dblclick(d) {
+      if (d.children) {
+        d._children = d.children;
+        d.children = null;
+      } else {
+        d.children = d._children;
+        d._children = null;
+      }
+      update(d);
+    }
+
+    function click(d) {
+
+    }
+  })();
+
+
+  /*
+    second: showing the matrix
+  */
+  (function () {
+    var margin = {top: 100, right: 100, bottom: 100, left: 100},
+        width = 400 + margin.left + margin.right,
+        height = 400 + margin.top + margin.bottom;
+
+    // var svg = d3.select("#matrix-container").append("svg")
+    //     .attr("width", width)
+    //     .attr("height", height)
+    //     .style("margin-left", -margin.left + "px")
+    //   .append("g")
+    //     .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+    // svg.append("rect")
+    //     .attr("class", "background")
+    //     .attr("width", width)
+    //     .attr("height", height);
+
+    d3.json("matrix", function (error, matrix) {
+      if (error) throw error;
+
+      // matrix stored in column-major order...
+      var m = matrix.length,
+          n = matrix[0].length;
+
+      var canvas = d3.select("#matrix")
+          .attr("height", n)
+          .attr("width", m);
+
+      var context = canvas.node().getContext("2d"),
+          image = context.createImageData(m, n),
+          colormap = d3.scaleSequential(d3.interpolateViridis);
+      for (var j = 0, k = 0, l = 0; j < m; ++j) {
+        for (var i = 0; i < n; ++i, ++k, l += 4) {
+          var c = d3.rgb(colormap(matrix[j][i]));
+          image.data[l + 0] = c.r;
+          image.data[l + 1] = c.g;
+          image.data[l + 2] = c.b;
+          image.data[l + 3] = 255;
+        }
+      }
+
+      context.putImageData(image, 0, 0);
+    });
+  })();
+
+  /*
+    third: showing the scatter plot
+  */
+  
+  (function () {
+    d3.json("points", function (error, points) {
+      if (error) throw error;
+
+      var n = points[0].length;
+      var trace = {
+        x: points[0],
+        y: points[1],
+        z: points[2],
+        mode: 'markers',
+        marker: {
+          size: 4,
+          color: 'rgb(180,180,180)',
+          line: {
+            color: 'rgba(140, 140, 140, 0.14)',
+            width: 0.5
+          },
+          opacity: 0.8
+        },
+        type: 'scatter3d'
+      };
+      var data = [trace];
+      var layout = {
+        margin: {
+          l: 0,
+          r: 0,
+          b: 0,
+          t: 0
+        },
+        scene: {
+          xaxis: {
+            title: '',
+            showticklabels: false,
+            nticks: 4,
+            zeroline: false
+          },
+          yaxis: {
+            title: '',
+            showticklabels: false,
+            nticks: 4,
+            zeroline: false
+          },
+          zaxis: {
+            title: '',
+            showticklabels: false,
+            nticks: 4,
+            zeroline: false
+          }
+        },
+        showlegend: false
+      };
+      Plotly.newPlot('scatter-container', data, layout, {displaylogo: false});
+    });
+  })();
+
+</script>
+
+

@@ -6,7 +6,7 @@ import HttpServer.FileResponse
 using JSON
 include("main.jl")
 
-data = two_block(240,240,10);
+data = two_block(240,240,1);
 points_tree,vecs_point,sensors_tree,vecs_sensor = organize(data,6,8);
 
 

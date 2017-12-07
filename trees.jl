@@ -272,6 +272,34 @@ function dual_geometry(data,tree; alpha=1,normalize_=true,center_=true,cutoff=2)
 end
 
 
+function as_dict(f::Folder)
+    ret = Dict{Any,Any}([:idxs => collect(f.idxs)])
+    if length(f.children) > 0
+        ret[:children] = [as_dict(c) for c in f.children]
+    end
+    return ret
+end
+
+function as_dict_lean(f::Folder)
+    ret = Dict{Any,Any}()
+    if length(f.children) > 0
+        ret[:children] = [as_dict_lean(c) for c in f.children]
+    else
+        # guaranteed to be leaf
+        ret[:idx] = collect(f.idxs)[1]
+    end
+    return ret
+end
+
+function as_dict(tree::PartitionTree)
+    root = tree.levels[1].folders[1]
+    return as_dict(root)
+end
+
+function as_dict_lean(tree::PartitionTree)
+    root = tree.levels[1].folders[1]
+    return as_dict_lean(root)
+end
 
 
 #
